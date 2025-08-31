@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const morgan = require('morgan');
+const fs = require('fs').promises;
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -33,53 +35,109 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Use in-memory storage for now (more reliable)
-let campaignData = {
-  goal: 1800000,
-  raised: 950000,
-  lastUpdated: new Date().toISOString().split('T')[0]
-};
+// File paths for persistent storage
+const DATA_DIR = path.join(__dirname, 'data');
+const CAMPAIGN_FILE = path.join(DATA_DIR, 'campaign.json');
+const DEDICATIONS_FILE = path.join(DATA_DIR, 'dedications.json');
 
-let dedicationsData = [
-  { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
-  { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
-  { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 },
-  { "id": 3, "title": "Basketball Court", "amount": "$250,000", "status": "available", "phase": 1 },
-  { "id": 2, "title": "Baseball Field", "amount": "$200,000", "status": "available", "phase": 1 },
-  { "id": 4, "title": "Pickleball Court", "amount": "$180,000", "status": "available", "phase": 1 },
-  { "id": 5, "title": "Kids Car Track", "amount": "$100,000", "status": "sold", "phase": 1 },
-  { "id": 8, "title": "Nature Trail", "amount": "$100,000", "status": "available", "phase": 1 },
-  { "id": 9, "title": "Nature Nest", "amount": "$75,000", "status": "available", "phase": 1 },
-  { "id": 10, "title": "Water Slides", "amount": "$25,000", "status": "available", "phase": 1 },
-  { "id": 11, "title": "Gazebos", "amount": "$25,000", "status": "available", "phase": 1 },
-  { "id": 12, "title": "Bleachers", "amount": "$5,000", "status": "available", "phase": 1 },
-  { "id": 13, "title": "Benches", "amount": "$3,600", "status": "available", "phase": 1 },
-  { "id": 14, "title": "Retreat House", "amount": "$850,000", "status": "available", "phase": 2 },
-  { "id": 15, "title": "Gym", "amount": "$4,000,000", "status": "available", "phase": 2 }
-];
+// Ensure data directory exists
+async function ensureDataDir() {
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+  } catch (error) {
+    console.log('Data directory already exists or cannot be created');
+  }
+}
 
+// Load data from file or use defaults
+async function loadCampaignData() {
+  try {
+    await ensureDataDir();
+    const data = await fs.readFile(CAMPAIGN_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    // Return default data if file doesn't exist
+    return {
+      goal: 1800000,
+      raised: 950000,
+      lastUpdated: new Date().toISOString().split('T')[0]
+    };
+  }
+}
+
+async function loadDedicationsData() {
+  try {
+    await ensureDataDir();
+    const data = await fs.readFile(DEDICATIONS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    // Return default dedications if file doesn't exist
+    return [
+      { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
+      { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
+      { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 },
+      { "id": 3, "title": "Basketball Court", "amount": "$250,000", "status": "available", "phase": 1 },
+      { "id": 2, "title": "Baseball Field", "amount": "$200,000", "status": "available", "phase": 1 },
+      { "id": 4, "title": "Pickleball Court", "amount": "$180,000", "status": "available", "phase": 1 },
+      { "id": 5, "title": "Kids Car Track", "amount": "$100,000", "status": "sold", "phase": 1 },
+      { "id": 8, "title": "Nature Trail", "amount": "$100,000", "status": "available", "phase": 1 },
+      { "id": 9, "title": "Nature Nest", "amount": "$75,000", "status": "available", "phase": 1 },
+      { "id": 10, "title": "Water Slides", "amount": "$25,000", "status": "available", "phase": 1 },
+      { "id": 11, "title": "Gazebos", "amount": "$25,000", "status": "available", "phase": 1 },
+      { "id": 12, "title": "Bleachers", "amount": "$5,000", "status": "available", "phase": 1 },
+      { "id": 13, "title": "Benches", "amount": "$3,600", "status": "available", "phase": 1 },
+      { "id": 14, "title": "Retreat House", "amount": "$850,000", "status": "available", "phase": 2 },
+      { "id": 15, "title": "Gym", "amount": "$4,000,000", "status": "available", "phase": 2 }
+    ];
+  }
+}
+
+// Save data to file
+async function saveCampaignData(data) {
+  try {
+    await ensureDataDir();
+    await fs.writeFile(CAMPAIGN_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Error saving campaign data:', error);
+  }
+}
+
+async function saveDedicationsData(data) {
+  try {
+    await ensureDataDir();
+    await fs.writeFile(DEDICATIONS_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('Error saving dedications data:', error);
+  }
+}
+
+// Database operations with persistent storage
 const db = {
   async getCampaignData() {
-    return campaignData;
+    return await loadCampaignData();
   },
   async updateCampaignData(data) {
-    campaignData = data;
+    await saveCampaignData(data);
     return data;
   },
   async getDedications() {
-    return dedicationsData;
+    return await loadDedicationsData();
   },
   async updateDedication(dedication) {
-    const index = dedicationsData.findIndex(d => d.id === dedication.id);
+    const dedications = await loadDedicationsData();
+    const index = dedications.findIndex(d => d.id === dedication.id);
     if (index !== -1) {
-      dedicationsData[index] = dedication;
+      dedications[index] = dedication;
     }
+    await saveDedicationsData(dedications);
     return dedication;
   },
   async addDedication(dedication) {
-    const newId = Math.max(...dedicationsData.map(d => d.id), 0) + 1;
+    const dedications = await loadDedicationsData();
+    const newId = Math.max(...dedications.map(d => d.id), 0) + 1;
     const newDedication = { ...dedication, id: newId };
-    dedicationsData.push(newDedication);
+    dedications.push(newDedication);
+    await saveDedicationsData(dedications);
     return [newDedication];
   }
 };
@@ -248,7 +306,7 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'Server is running',
     timestamp: new Date().toISOString(),
-    storage: 'memory'
+    storage: 'persistent'
   });
 });
 
