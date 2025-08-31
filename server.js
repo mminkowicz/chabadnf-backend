@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const morgan = require('morgan');
+const { db } = require('./database');
 require('dotenv').config();
 
 const app = express();
@@ -33,30 +34,7 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// In-memory data storage (for Vercel serverless compatibility)
-let campaignData = {
-  goal: 1800000,
-  raised: 950000,
-  lastUpdated: new Date().toISOString().split('T')[0]
-};
-
-let dedicationsData = [
-  { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
-  { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
-  { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 },
-  { "id": 3, "title": "Basketball Court", "amount": "$250,000", "status": "available", "phase": 1 },
-  { "id": 2, "title": "Baseball Field", "amount": "$200,000", "status": "available", "phase": 1 },
-  { "id": 4, "title": "Pickleball Court", "amount": "$180,000", "status": "available", "phase": 1 },
-  { "id": 5, "title": "Kids Car Track", "amount": "$100,000", "status": "sold", "phase": 1 },
-  { "id": 8, "title": "Nature Trail", "amount": "$100,000", "status": "available", "phase": 1 },
-  { "id": 9, "title": "Nature Nest", "amount": "$75,000", "status": "available", "phase": 1 },
-  { "id": 10, "title": "Water Slides", "amount": "$25,000", "status": "available", "phase": 1 },
-  { "id": 11, "title": "Gazebos", "amount": "$25,000", "status": "available", "phase": 1 },
-  { "id": 12, "title": "Bleachers", "amount": "$5,000", "status": "available", "phase": 1 },
-  { "id": 13, "title": "Benches", "amount": "$3,600", "status": "available", "phase": 1 },
-  { "id": 14, "title": "Retreat House", "amount": "$850,000", "status": "available", "phase": 2 },
-  { "id": 15, "title": "Gym", "amount": "$4,000,000", "status": "available", "phase": 2 }
-];
+// Database storage for persistent data across all serverless instances
 
 // Validation middleware
 const validateCampaignUpdate = [
@@ -90,6 +68,7 @@ const handleValidationErrors = (req, res, next) => {
 // GET /api/campaign-data
 app.get('/api/campaign-data', async (req, res) => {
   try {
+    const campaignData = await db.getCampaignData();
     res.json({
       success: true,
       data: campaignData
@@ -108,11 +87,14 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
   try {
     const { goal, raised, lastUpdated } = req.body;
     
-    campaignData = {
+    const campaignData = {
+      id: 1, // Single record for campaign data
       goal: Number(goal),
       raised: Number(raised),
       lastUpdated: lastUpdated
     };
+    
+    await db.updateCampaignData(campaignData);
     
     res.json({
       success: true,
@@ -131,6 +113,7 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
 // GET /api/dedications
 app.get('/api/dedications', async (req, res) => {
   try {
+    const dedicationsData = await db.getDedications();
     res.json({
       success: true,
       data: dedicationsData
@@ -156,26 +139,20 @@ app.post('/api/update-dedication', validateDedication, handleValidationErrors, a
       });
     }
 
-    const dedicationIndex = dedicationsData.findIndex(d => d.id === Number(id));
-    if (dedicationIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'Dedication not found'
-      });
-    }
-
-    dedicationsData[dedicationIndex] = {
-      ...dedicationsData[dedicationIndex],
+    const dedication = {
+      id: Number(id),
       title: title.trim(),
       amount: amount.trim(),
       status,
-      phase: phase || dedicationsData[dedicationIndex].phase || 1
+      phase: phase || 1
     };
+
+    await db.updateDedication(dedication);
     
     res.json({
       success: true,
       message: 'Dedication updated successfully',
-      data: dedicationsData[dedicationIndex]
+      data: dedication
     });
   } catch (error) {
     console.error('Error updating dedication:', error);
@@ -191,23 +168,19 @@ app.post('/api/add-dedication', validateDedication, handleValidationErrors, asyn
   try {
     const { title, amount, status, phase } = req.body;
     
-    // Generate new ID
-    const newId = Math.max(...dedicationsData.map(d => d.id), 0) + 1;
-    
     const newDedication = {
-      id: newId,
       title: title.trim(),
       amount: amount.trim(),
       status,
       phase: phase || 1
     };
 
-    dedicationsData.push(newDedication);
+    const result = await db.addDedication(newDedication);
     
     res.status(201).json({
       success: true,
       message: 'Dedication added successfully',
-      data: newDedication
+      data: result[0]
     });
   } catch (error) {
     console.error('Error adding dedication:', error);
