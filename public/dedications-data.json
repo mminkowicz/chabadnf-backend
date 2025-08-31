@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "title": "Campus Dedication",
+    "amount": "$900,000",
+    "status": "available",
+    "phase": 1
+  },
+  {
+    "id": 7,
+    "title": "Playground",
+    "amount": "$300,000",
+    "status": "available",
+    "phase": 1
+  },
+  {
+    "id": 6,
+    "title": "Soccer Field",
+    "amount": "$300,000",
+    "status": "sold",
+    "phase": 1
+  }
+]
