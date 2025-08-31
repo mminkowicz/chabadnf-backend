@@ -4,8 +4,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const morgan = require('morgan');
-const fs = require('fs').promises;
-const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -35,51 +33,30 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// File paths
-const CAMPAIGN_DATA_PATH = path.join(__dirname, 'public', 'campaign-data.json');
-const DEDICATIONS_DATA_PATH = path.join(__dirname, 'public', 'dedications-data.json');
+// In-memory data storage (for Vercel serverless compatibility)
+let campaignData = {
+  goal: 1800000,
+  raised: 950000,
+  lastUpdated: new Date().toISOString().split('T')[0]
+};
 
-// Ensure public directory exists
-async function ensurePublicDirectory() {
-  try {
-    await fs.mkdir(path.join(__dirname, 'public'), { recursive: true });
-  } catch (error) {
-    console.error('Error creating public directory:', error);
-  }
-}
-
-// Initialize data files if they don't exist
-async function initializeDataFiles() {
-  try {
-    // Initialize campaign data
-    try {
-      await fs.access(CAMPAIGN_DATA_PATH);
-    } catch {
-      const initialCampaignData = {
-        goal: 1800000,
-        raised: 950000,
-        lastUpdated: new Date().toISOString().split('T')[0]
-      };
-      await fs.writeFile(CAMPAIGN_DATA_PATH, JSON.stringify(initialCampaignData, null, 2));
-      console.log('Campaign data file initialized');
-    }
-
-    // Initialize dedications data
-    try {
-      await fs.access(DEDICATIONS_DATA_PATH);
-    } catch {
-      const initialDedicationsData = [
-        { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
-        { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
-        { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 }
-      ];
-      await fs.writeFile(DEDICATIONS_DATA_PATH, JSON.stringify(initialDedicationsData, null, 2));
-      console.log('Dedications data file initialized');
-    }
-  } catch (error) {
-    console.error('Error initializing data files:', error);
-  }
-}
+let dedicationsData = [
+  { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
+  { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
+  { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 },
+  { "id": 3, "title": "Basketball Court", "amount": "$250,000", "status": "available", "phase": 1 },
+  { "id": 2, "title": "Baseball Field", "amount": "$200,000", "status": "available", "phase": 1 },
+  { "id": 4, "title": "Pickleball Court", "amount": "$180,000", "status": "available", "phase": 1 },
+  { "id": 5, "title": "Kids Car Track", "amount": "$100,000", "status": "sold", "phase": 1 },
+  { "id": 8, "title": "Nature Trail", "amount": "$100,000", "status": "available", "phase": 1 },
+  { "id": 9, "title": "Nature Nest", "amount": "$75,000", "status": "available", "phase": 1 },
+  { "id": 10, "title": "Water Slides", "amount": "$25,000", "status": "available", "phase": 1 },
+  { "id": 11, "title": "Gazebos", "amount": "$25,000", "status": "available", "phase": 1 },
+  { "id": 12, "title": "Bleachers", "amount": "$5,000", "status": "available", "phase": 1 },
+  { "id": 13, "title": "Benches", "amount": "$3,600", "status": "available", "phase": 1 },
+  { "id": 14, "title": "Retreat House", "amount": "$850,000", "status": "available", "phase": 2 },
+  { "id": 15, "title": "Gym", "amount": "$4,000,000", "status": "available", "phase": 2 }
+];
 
 // Validation middleware
 const validateCampaignUpdate = [
@@ -113,8 +90,6 @@ const handleValidationErrors = (req, res, next) => {
 // GET /api/campaign-data
 app.get('/api/campaign-data', async (req, res) => {
   try {
-    const data = await fs.readFile(CAMPAIGN_DATA_PATH, 'utf8');
-    const campaignData = JSON.parse(data);
     res.json({
       success: true,
       data: campaignData
@@ -133,13 +108,11 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
   try {
     const { goal, raised, lastUpdated } = req.body;
     
-    const campaignData = {
+    campaignData = {
       goal: Number(goal),
       raised: Number(raised),
       lastUpdated: lastUpdated
     };
-
-    await fs.writeFile(CAMPAIGN_DATA_PATH, JSON.stringify(campaignData, null, 2));
     
     res.json({
       success: true,
@@ -158,11 +131,9 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
 // GET /api/dedications
 app.get('/api/dedications', async (req, res) => {
   try {
-    const data = await fs.readFile(DEDICATIONS_DATA_PATH, 'utf8');
-    const dedications = JSON.parse(data);
     res.json({
       success: true,
-      data: dedications
+      data: dedicationsData
     });
   } catch (error) {
     console.error('Error reading dedications:', error);
@@ -185,10 +156,7 @@ app.post('/api/update-dedication', validateDedication, handleValidationErrors, a
       });
     }
 
-    const data = await fs.readFile(DEDICATIONS_DATA_PATH, 'utf8');
-    const dedications = JSON.parse(data);
-    
-    const dedicationIndex = dedications.findIndex(d => d.id === Number(id));
+    const dedicationIndex = dedicationsData.findIndex(d => d.id === Number(id));
     if (dedicationIndex === -1) {
       return res.status(404).json({
         success: false,
@@ -196,20 +164,18 @@ app.post('/api/update-dedication', validateDedication, handleValidationErrors, a
       });
     }
 
-    dedications[dedicationIndex] = {
-      ...dedications[dedicationIndex],
+    dedicationsData[dedicationIndex] = {
+      ...dedicationsData[dedicationIndex],
       title: title.trim(),
       amount: amount.trim(),
       status,
-      phase: phase || dedications[dedicationIndex].phase || 1
+      phase: phase || dedicationsData[dedicationIndex].phase || 1
     };
-
-    await fs.writeFile(DEDICATIONS_DATA_PATH, JSON.stringify(dedications, null, 2));
     
     res.json({
       success: true,
       message: 'Dedication updated successfully',
-      data: dedications[dedicationIndex]
+      data: dedicationsData[dedicationIndex]
     });
   } catch (error) {
     console.error('Error updating dedication:', error);
@@ -225,11 +191,8 @@ app.post('/api/add-dedication', validateDedication, handleValidationErrors, asyn
   try {
     const { title, amount, status, phase } = req.body;
     
-    const data = await fs.readFile(DEDICATIONS_DATA_PATH, 'utf8');
-    const dedications = JSON.parse(data);
-    
     // Generate new ID
-    const newId = Math.max(...dedications.map(d => d.id), 0) + 1;
+    const newId = Math.max(...dedicationsData.map(d => d.id), 0) + 1;
     
     const newDedication = {
       id: newId,
@@ -239,8 +202,7 @@ app.post('/api/add-dedication', validateDedication, handleValidationErrors, asyn
       phase: phase || 1
     };
 
-    dedications.push(newDedication);
-    await fs.writeFile(DEDICATIONS_DATA_PATH, JSON.stringify(dedications, null, 2));
+    dedicationsData.push(newDedication);
     
     res.status(201).json({
       success: true,
@@ -284,9 +246,6 @@ app.use((error, req, res, next) => {
 
 // Initialize and start server
 async function startServer() {
-  await ensurePublicDirectory();
-  await initializeDataFiles();
-  
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📊 API available at http://localhost:${PORT}/api`);
