@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LocalStorage Test</title>
+</head>
+<body>
+    <h1>LocalStorage Test</h1>
+    <div id="current-data"></div>
+    <div id="localstorage-data"></div>
+    <button onclick="testAPI()">Test API</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+    <button onclick="setTestData()">Set Test Data</button>
+    
+    <script>
+        function testAPI() {
+            fetch('https://chabadnf-backend.vercel.app/api/campaign-data')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('current-data').innerHTML = 
+                        '<h3>API Response:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    
+                    // Check localStorage
+                    const savedData = localStorage.getItem('chabadnf_campaign_data');
+                    document.getElementById('localstorage-data').innerHTML = 
+                        '<h3>LocalStorage Data:</h3><pre>' + (savedData || 'No data') + '</pre>';
+                    
+                    // Test the logic
+                    if (savedData) {
+                        const parsedSavedData = JSON.parse(savedData);
+                        const apiData = data.data;
+                        
+                        console.log('API data:', apiData);
+                        console.log('Saved data:', parsedSavedData);
+                        console.log('API lastUpdated:', apiData.lastUpdated);
+                        console.log('Saved lastUpdated:', parsedSavedData.lastUpdated);
+                        
+                        if (parsedSavedData.lastUpdated && (!apiData.lastUpdated || parsedSavedData.lastUpdated > apiData.lastUpdated)) {
+                            console.log('Should use saved data');
+                        } else {
+                            console.log('Should use API data');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('current-data').innerHTML = '<h3>Error:</h3><pre>' + error + '</pre>';
+                });
+        }
+        
+        function clearStorage() {
+            localStorage.removeItem('chabadnf_campaign_data');
+            document.getElementById('localstorage-data').innerHTML = '<h3>Storage Cleared</h3>';
+        }
+        
+        function setTestData() {
+            const testData = {
+                goal: 1800000,
+                raised: 250000,
+                lastUpdated: new Date().toISOString().split('T')[0]
+            };
+            localStorage.setItem('chabadnf_campaign_data', JSON.stringify(testData));
+            document.getElementById('localstorage-data').innerHTML = 
+                '<h3>Test Data Set:</h3><pre>' + JSON.stringify(testData, null, 2) + '</pre>';
+        }
+        
+        // Auto-test on load
+        window.onload = testAPI;
+    </script>
+</body>
+</html>
