@@ -35,12 +35,16 @@ app.use(express.urlencoded({ extended: true }));
 
 // Initialize database connection with fallback
 let db = null;
+let useSupabase = false;
+
 try {
   const { db: database } = require('./database');
   db = database;
+  useSupabase = true;
   console.log('✅ Supabase database connected');
 } catch (error) {
   console.log('⚠️ Supabase not configured, using in-memory storage');
+  useSupabase = false;
   // Fallback to in-memory storage
   let campaignData = {
     goal: 1800000,
@@ -144,6 +148,9 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
   try {
     const { goal, raised, lastUpdated } = req.body;
     
+    console.log('Updating campaign with data:', { goal, raised, lastUpdated });
+    console.log('Using Supabase:', useSupabase);
+    
     const campaignData = {
       id: 1, // Single record for campaign data
       goal: Number(goal),
@@ -151,7 +158,8 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
       lastUpdated: lastUpdated
     };
     
-    await db.updateCampaignData(campaignData);
+    const result = await db.updateCampaignData(campaignData);
+    console.log('Update result:', result);
     
     res.json({
       success: true,
@@ -160,9 +168,11 @@ app.post('/api/update-campaign', validateCampaignUpdate, handleValidationErrors,
     });
   } catch (error) {
     console.error('Error updating campaign:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Error updating campaign. Please try again.'
+      message: 'Error updating campaign. Please try again.',
+      error: useSupabase ? 'Database error' : 'Storage error'
     });
   }
 });
@@ -253,7 +263,9 @@ app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     message: 'Server is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    storage: useSupabase ? 'supabase' : 'memory',
+    supabaseUrl: useSupabase ? process.env.SUPABASE_URL : null
   });
 });
 
