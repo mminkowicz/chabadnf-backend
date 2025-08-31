@@ -14,7 +14,7 @@ app.use(helmet());
 
 // CORS configuration for campexpansion.com
 app.use(cors({
-  origin: ['https://campexpansion.com', 'http://localhost:3000'],
+  origin: ['https://campexpansion.com', 'https://www.campexpansion.com', 'http://localhost:3000'],
   credentials: true
 }));
 
