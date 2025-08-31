@@ -4,7 +4,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const morgan = require('morgan');
-const { db } = require('./database');
 require('dotenv').config();
 
 const app = express();
@@ -34,7 +33,65 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Database storage for persistent data across all serverless instances
+// Initialize database connection with fallback
+let db = null;
+try {
+  const { db: database } = require('./database');
+  db = database;
+  console.log('✅ Supabase database connected');
+} catch (error) {
+  console.log('⚠️ Supabase not configured, using in-memory storage');
+  // Fallback to in-memory storage
+  let campaignData = {
+    goal: 1800000,
+    raised: 950000,
+    lastUpdated: new Date().toISOString().split('T')[0]
+  };
+
+  let dedicationsData = [
+    { "id": 1, "title": "Campus Dedication", "amount": "$900,000", "status": "available", "phase": 1 },
+    { "id": 7, "title": "Playground", "amount": "$300,000", "status": "available", "phase": 1 },
+    { "id": 6, "title": "Soccer Field", "amount": "$300,000", "status": "sold", "phase": 1 },
+    { "id": 3, "title": "Basketball Court", "amount": "$250,000", "status": "available", "phase": 1 },
+    { "id": 2, "title": "Baseball Field", "amount": "$200,000", "status": "available", "phase": 1 },
+    { "id": 4, "title": "Pickleball Court", "amount": "$180,000", "status": "available", "phase": 1 },
+    { "id": 5, "title": "Kids Car Track", "amount": "$100,000", "status": "sold", "phase": 1 },
+    { "id": 8, "title": "Nature Trail", "amount": "$100,000", "status": "available", "phase": 1 },
+    { "id": 9, "title": "Nature Nest", "amount": "$75,000", "status": "available", "phase": 1 },
+    { "id": 10, "title": "Water Slides", "amount": "$25,000", "status": "available", "phase": 1 },
+    { "id": 11, "title": "Gazebos", "amount": "$25,000", "status": "available", "phase": 1 },
+    { "id": 12, "title": "Bleachers", "amount": "$5,000", "status": "available", "phase": 1 },
+    { "id": 13, "title": "Benches", "amount": "$3,600", "status": "available", "phase": 1 },
+    { "id": 14, "title": "Retreat House", "amount": "$850,000", "status": "available", "phase": 2 },
+    { "id": 15, "title": "Gym", "amount": "$4,000,000", "status": "available", "phase": 2 }
+  ];
+
+  db = {
+    async getCampaignData() {
+      return campaignData;
+    },
+    async updateCampaignData(data) {
+      campaignData = data;
+      return data;
+    },
+    async getDedications() {
+      return dedicationsData;
+    },
+    async updateDedication(dedication) {
+      const index = dedicationsData.findIndex(d => d.id === dedication.id);
+      if (index !== -1) {
+        dedicationsData[index] = dedication;
+      }
+      return dedication;
+    },
+    async addDedication(dedication) {
+      const newId = Math.max(...dedicationsData.map(d => d.id), 0) + 1;
+      const newDedication = { ...dedication, id: newId };
+      dedicationsData.push(newDedication);
+      return [newDedication];
+    }
+  };
+}
 
 // Validation middleware
 const validateCampaignUpdate = [
